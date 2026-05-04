@@ -231,8 +231,9 @@ public class DataProfiler {
             issues.add("sex: blank");
             codes.add(ISSUE_CODE_MAP.get("blank"));
         } else {
-            String n = val.trim().toUpperCase();
-            if (!n.equals("MALE") && !n.equals("FEMALE") && !n.equals("M") && !n.equals("F")) {
+            String n = val.trim();
+            // Valid values are "1" (Male) and "2" (Female)
+            if (!n.equals("1") && !n.equals("2")) {
                 issues.add("sex: invalid_value");
                 codes.add(ISSUE_CODE_MAP.get("abnormal_value"));
             }
