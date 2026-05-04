@@ -132,64 +132,63 @@ public class DataProfiler {
         List<String> issues = new ArrayList<>();
         List<String> codes = new ArrayList<>();
 
+        // 1. Extract raw data from ResultSet
         String rsbsaNo = rs.getString("rsbsa_no");
         String surname = rs.getString("surname");
         String firstName = rs.getString("first_name");
         String middleName = rs.getString("middle_name");
+        String sex = rs.getString("sex");
         LocalDate bday = rs.getObject("birthday", LocalDate.class);
 
-        // Validation Logic
-        validateField(surname, "surname", issues, codes);
-        validateField(firstName, "first_name", issues, codes);
-        validateField(middleName, "middle_name", issues, codes);
-        validateRequired(rsbsaNo, "rsbsa_no", issues, codes);
-        validateRequired(rs.getString("reg"), "region", issues, codes);
-        validateRequired(rs.getString("prv"), "province", issues, codes);
-        validateSex(rs.getString("sex"), issues, codes);
-        validateBirthday(bday, issues, codes);
-
-        // Suffix Extraction
-        String detectedSuffix = null;
-        if (surname != null && !surname.isEmpty()) {
-            String[] parts = surname.trim().split("\\s+");
-            if (parts.length > 1) {
-                String lastPart = parts[parts.length - 1].toUpperCase();
-                if (SUFFIXES.contains(lastPart)) {
-                    detectedSuffix = lastPart;
-                    issues.add("surname: has_suffix_in_surname");
-                    codes.add(ISSUE_CODE_MAP.get("has_suffix_in_surname"));
-                }
-            }
-        }
-
-        if (issues.isEmpty()) return null;
-
-        // Populate Result Object
+        // 2. Initialize the Result Object and fill basic info
         IssueResult res = new IssueResult();
         res.rsbsaNo = rsbsaNo;
         res.originalSurname = surname;
         res.extName = rs.getString("ext_name");
         res.firstName = firstName;
         res.middleName = middleName;
-        res.sex = rs.getString("sex");
+        res.sex = sex;
         res.birthday = bday;
         res.region = rs.getString("reg");
         res.province = rs.getString("prv");
         res.municipality = rs.getString("mun");
         res.barangay = rs.getString("brgy");
-        res.detectedSuffix = detectedSuffix;
-        res.issueFlag = String.join(", ", issues);
-        res.errorCode = String.join(", ", codes);
         res.dateCreated = getLocalDateTime(rs.getTimestamp("date_created"));
         res.dateUpdated = getLocalDateTime(rs.getTimestamp("date_updated"));
         res.encoderFullname = rs.getString("encoder_fullname");
         res.dataSource = rs.getString("data_source");
 
-        if (bday != null) {
-            res.age = java.time.Period.between(bday, LocalDate.now()).getYears();
-            if (res.age < 15) res.ageFlag = "age: minor_age";
-            else if (res.age > 100) res.ageFlag = "age: senior_age";
+        // 3. Run Validation Logic (This fills the 'issues' and 'codes' lists)
+        validateField(surname, "surname", issues, codes);
+        validateField(firstName, "first_name", issues, codes);
+        validateField(middleName, "middle_name", issues, codes);
+        validateRequired(rsbsaNo, "rsbsa_no", issues, codes);
+        validateRequired(res.region, "region", issues, codes);
+        validateRequired(res.province, "province", issues, codes);
+        validateSex(sex, issues, codes);
+        validateBirthdayAndAge(bday, issues, codes, res);
+
+        // 4. Suffix Extraction Logic
+        if (surname != null && !surname.isEmpty()) {
+            String[] parts = surname.trim().split("\\s+");
+            if (parts.length > 1) {
+                String lastPart = parts[parts.length - 1].toUpperCase();
+                if (SUFFIXES.contains(lastPart)) {
+                    res.detectedSuffix = lastPart; // Store the found suffix
+                    issues.add("surname: has_suffix_in_surname");
+                    codes.add(ISSUE_CODE_MAP.get("has_suffix_in_surname"));
+                }
+            }
         }
+
+        // 5. If no issues were found at all, return null (skip this record)
+        if (issues.isEmpty()) {
+            return null;
+        }
+
+        // 6. Finalize: Join the lists into single strings for the database columns
+        res.issueFlag = String.join(", ", issues);
+        res.errorCode = String.join(", ", codes);
 
         return res;
     }
@@ -240,18 +239,38 @@ public class DataProfiler {
         }
     }
 
-    private static void validateBirthday(LocalDate bday, List<String> issues, List<String> codes) {
+    private static void validateBirthdayAndAge(LocalDate bday, List<String> issues, List<String> codes, IssueResult res) {
         if (bday == null) {
             issues.add("birthday: null_value");
-            codes.add(ISSUE_CODE_MAP.get("null_value"));
-        } else {
-            if (bday.isAfter(LocalDate.now())) {
-                issues.add("birthday: future_date");
-                codes.add(ISSUE_CODE_MAP.get("abnormal_value"));
-            } else if (bday.isBefore(LocalDate.of(1900, 1, 1))) {
-                issues.add("birthday: unrealistic_date");
-                codes.add(ISSUE_CODE_MAP.get("abnormal_value"));
-            }
+            codes.add(ISSUE_CODE_MAP.get("null_value")); // Maps to "H"
+            return;
+        }
+
+        // Compute age based on current date
+        int age = java.time.Period.between(bday, LocalDate.now()).getYears();
+        res.age = age; // Store the actual calculated age
+
+        // Map to your new specific categories
+        if (age > 100) {
+            issues.add("age: invalid_age");
+            codes.add(ISSUE_CODE_MAP.get("invalid_age")); // Maps to "I"
+            res.ageFlag = "age: invalid_age";
+        }
+        else if (age >= 70 && age <= 90) {
+            issues.add("age: senior_age");
+            codes.add(ISSUE_CODE_MAP.get("senior_age")); // Maps to "K"
+            res.ageFlag = "age: senior_age";
+        }
+        else if (age <= 10) {
+            issues.add("age: minor_age");
+            codes.add(ISSUE_CODE_MAP.get("minor_age")); // Maps to "J"
+            res.ageFlag = "age: minor_age";
+        }
+
+        // Additional sanity check for future dates (retains Code G if desired)
+        if (bday.isAfter(LocalDate.now())) {
+            issues.add("birthday: future_date");
+            codes.add(ISSUE_CODE_MAP.get("abnormal_value")); // Maps to "G"
         }
     }
 
