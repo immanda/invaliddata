@@ -256,7 +256,7 @@ public class DataProfiler {
             codes.add(ISSUE_CODE_MAP.get("invalid_age")); // Maps to "I"
             res.ageFlag = "age: invalid_age";
         }
-        else if (age >= 70 && age <= 90) {
+        else if (age >= 90 && age <= 99) {
             issues.add("age: senior_age");
             codes.add(ISSUE_CODE_MAP.get("senior_age")); // Maps to "K"
             res.ageFlag = "age: senior_age";
