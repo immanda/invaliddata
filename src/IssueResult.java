@@ -3,6 +3,7 @@ import java.time.LocalDateTime;
 
 public class IssueResult {
     public String rsbsaNo;
+    public String useCaseId;
     public String originalSurname;
     public String extName;
     public String firstName;
